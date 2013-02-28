@@ -55,34 +55,34 @@ void zoom430(void)
 		// new row!
 		rando = rand() % 3;
 		if (rando == 0) {
-			l[5]++;
+			if (l[5] < (r[5] - 4)) {
+				l[5]++;
+			} else if (l[5] > 0) {
+				l[5]--;
+			}
 		} else if (rando == 1) {
-			l[5]--;
+			if (l[5] > 0) {
+				l[5]--;
+			} else if (l[5] < (r[5] - 4)) {
+				l[5]++;
+			}
 		}
-				
-		if (l[5] < 0) {
-		       l[5] = 0;
-		}
-
-		if (l[5] > (r[5] - 4)) {
-			l[5] = r[5] - 4;
-		}
-
+		
 		rando = rand() % 3;
 		if (rando == 0) {
-			r[5]++;
+			if (r[5] > (l[5] + 4)) {
+				r[5]--;
+			} else if (r[5] < 11) {
+				r[5]++;
+			}
 		} else if (rando == 1) {
-			r[5]--;
+			if (r[5] < 11) {
+				r[5]++;
+			} else if (r[5] > (l[5] + 4)) {
+				r[5]--;
+			}
 		}
 				
-		if (r[5] > 11) {
-		       r[5] = 11;
-		}
-
-		if (r[5] < (l[5] + 4)) {
-			r[5] = l[5] + 4;
-		}
-
 		LCD_gotoXY(l[5] * 7, 5);
 		LCD_writeString("|");
 		LCD_gotoXY(r[5] * 7, 5);

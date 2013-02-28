@@ -1,8 +1,12 @@
 #include <msp430.h>
 
 #include <stdlib.h>
+#include <stdbool.h>
 
 #include "pcd8544.h"
+
+volatile bool R_PRESSED = false;
+volatile bool L_PRESSED = false;
 
 void zoom430(void)
 {
@@ -12,6 +16,9 @@ void zoom430(void)
 
 	int i;
 	int rando;
+
+	bool R_WAS_PRESSED = false;
+	bool L_WAS_PRESSED = false;
 
 	// set up and draw initial screen
 	for (i = 0; i < 6; i++) {
@@ -89,7 +96,31 @@ void zoom430(void)
 		LCD_writeString("|");
 
 		// check butons, adjust pos
-	
+
+		if (L_PRESSED) {
+			if (!L_WAS_PRESSED) {
+				pos--;
+				if (pos < 0) {
+					pos = 0;
+				}
+			}
+			L_WAS_PRESSED = true;
+		} else {
+			L_WAS_PRESSED = false;
+		}
+
+		if (R_PRESSED) {
+			if (!R_WAS_PRESSED) {
+				pos++;
+				if (pos > 11) {
+					pos = 11;
+				}
+			}
+			R_WAS_PRESSED = true;
+		} else {
+			R_WAS_PRESSED = false;
+		}
+
 		// draw ship
 		LCD_gotoXY(pos * 7, 5);
 		LCD_writeString("V");	
@@ -104,7 +135,19 @@ void zoom430(void)
 
 int main(void)
 {
-	WDTCTL = WDTPW + WDTHOLD; // stop watchdog
+	// set up watchdog timer to debounce NMI/RESET button
+	WDTCTL = WDTPW | WDTHOLD | WDTNMIES | WDTNMI;
+	
+	P1DIR &= ~BIT3; // p1.3 is input
+	P1OUT |= BIT3; // p1.3 has internal pullup
+	P1REN |= BIT3;
+	P1IES |= BIT3; // falling edge
+	P1IE |= BIT3; // enable interrupt
+	
+	IFG1 &= ~(P1IFG | WDTIFG | NMIIFG); // clear watchdog and nmi interrupts
+	IE1 |= P1IE | WDTIE | NMIIE; // enable watchdog and nmi interrupts
+
+	__bis_SR_register(GIE); // enable global interrupts 
 
 	LCD_init();
 
@@ -125,5 +168,45 @@ int main(void)
 	zoom430();
 
 	for(;;);
+}
+
+#pragma vector = NMI_VECTOR
+__interrupt void nmi_isr(void)
+{
+	if (IFG1 & NMIIFG) { // nmi caused by nRST/NMI pin
+		IFG1 &= ~NMIIFG; // clear it
+		if (WDTCTL & WDTNMIES) { // falling edge detected
+			R_PRESSED = true; // tell the rest of the world that s1 is depressed
+			WDTCTL = WDT_MDLY_32 | WDTNMI; // debounce and detect rising edge
+		} else { // rising edge
+			R_PRESSED = false; // tell the rest of the world that s1 is released
+			WDTCTL = WDT_MDLY_32 | WDTNMIES | WDTNMI; // debounce and detect falling edge
+		}
+	} // Note that NMIIE is cleared; wdt_isr will set NMIIE 32msec later
+}
+
+#pragma vector = WDT_VECTOR
+__interrupt void wdt_isr(void)
+{
+	WDTCTL ^= (0x3300 | WDTHOLD); // flip wdthold while keeping other bits in tact
+	IFG1 &= ~NMIIFG; // It may have been set by switch bouncing, clear it
+	IE1 |= NMIIE; // Now we can enable nmi to detect the next edge
+}
+
+#pragma vector = PORT1_VECTOR
+__interrupt void port1_isr(void)
+{
+	if (P1IFG & BIT3) { // p1.3
+		if (P1IES & BIT3) {
+			// falling edge
+			L_PRESSED = true;
+			P1IES ^= BIT3; // toggle edge
+		} else {
+			// rising edge
+			L_PRESSED = false;
+			P1IES ^= BIT3;
+		}
+		P1IFG &= ~BIT3;
+	}
 }
 

@@ -2,17 +2,20 @@
 
 #include <stdlib.h>
 #include <stdbool.h>
+#include <stdio.h>
 
 #include "pcd8544.h"
 
 volatile bool R_PRESSED = false;
 volatile bool L_PRESSED = false;
 
-void zoom430(void)
+int zoom430(void)
 {
 	int pos = 5;
 	int l[6];
 	int r[6];
+	int dist = 0;
+	char str[10];
 
 	int i;
 	int rando;
@@ -34,6 +37,11 @@ void zoom430(void)
 	// draw ship
 	LCD_gotoXY(pos * 7, 5);
 	LCD_writeString("V");
+
+	// compensates for L_PRESSED :)
+	pos++;
+	// wait until you press a button
+	while (!L_PRESSED);
 
 	// main loop
 	for (;;) {
@@ -126,15 +134,28 @@ void zoom430(void)
 		LCD_writeString("V");	
 
 		// coldet
-	
+
+		if (pos <= l[5] || pos >= r[5]) {
+			// boom
+			return dist;
+		}
+
+		LCD_gotoXY(0, 0);
+		sprintf(str, "%d", dist);
+		LCD_writeString(str);
+
+		dist++;
+
 		// delay
-		__delay_cycles(2000000);
+		__delay_cycles(3000000);
 
 	}
 }
 
 int main(void)
 {
+	int dist = 0;
+	char str[20];
 	// set up watchdog timer to debounce NMI/RESET button
 	WDTCTL = WDTPW | WDTHOLD | WDTNMIES | WDTNMI;
 	
@@ -165,9 +186,20 @@ int main(void)
 
 	srand(42); // eh
 
-	zoom430();
+	for(;;) {
+		LCD_clear();
+		
+		dist = zoom430();
+		
+		sprintf(str, "LOSE at %d!", dist);
+		LCD_gotoXY(0,0);
+		LCD_writeString(str);
 
-	for(;;);
+		__delay_cycles(16000000);
+		
+		while(L_PRESSED);
+		while(!L_PRESSED);
+	}
 }
 
 #pragma vector = NMI_VECTOR
